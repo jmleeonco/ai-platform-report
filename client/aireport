@@ -101,7 +101,7 @@ def sha(b):
 def cmd_config(a, api):
     cfg = load_config()
     for k in ("url", "owner", "token"):
-        v = getattr(a, k)
+        v = getattr(a, "set_" + k)
         if v is not None:
             cfg[k] = v
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
@@ -594,9 +594,10 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("config", help="save defaults to ~/.config/aireport/config.json")
-    p.add_argument("--url", dest="url", default=None)
-    p.add_argument("--owner", dest="owner", default=None)
-    p.add_argument("--token", dest="token", default=None)
+    # own dests: the global --url/--owner/--token would otherwise be overwritten with None
+    p.add_argument("--url", dest="set_url", default=None)
+    p.add_argument("--owner", dest="set_owner", default=None)
+    p.add_argument("--token", dest="set_token", default=None)
     p.set_defaults(fn=cmd_config)
     sub.add_parser("health", help="server status").set_defaults(fn=cmd_health)
     p = sub.add_parser("guide", help="print the server's AGENTS.md (or docs/<doc>.md)")

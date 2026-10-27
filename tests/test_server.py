@@ -164,6 +164,11 @@ class ServerTest(unittest.TestCase):
         self.assertTrue(os.access(home / ".local" / "bin" / "aireport", os.X_OK))
         cfg = json.loads((home / ".config" / "aireport" / "config.json").read_text())
         self.assertEqual((cfg["url"], cfg["owner"]), (self.url, "tester"))
+        bin_ = str(home / ".local" / "bin" / "aireport")
+        env.pop("AIREPORT_OWNER")
+        for args in (["config", "--owner", "이종민"], ["config"], ["health"]):  # the steps AGENTS.md tells agents to run
+            subprocess.run([bin_, *args], env=env, check=True, capture_output=True)
+        self.assertEqual(json.loads((home / ".config" / "aireport" / "config.json").read_text())["owner"], "이종민")
         _, served = self.req("GET", "/client/SKILL.md", raw=True)
         self.assertEqual(served.decode(), skill)
 
