@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D viewer demo · AI Platform Reports</title>
+<link rel="stylesheet" href="../../assets/report.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="breadcrumb">
+    <a href="../../index.html">Research Topics</a> › <a href="../index.html?doc=volume-viewer">Guide</a> › <span>3D viewer demo</span>
+  </nav>
+  <h1 class="page-title">3D slice overlay viewer — demo</h1>
+  <p class="page-subtitle"><span class="badge neutral">synthetic phantom · no patient data</span></p>
+
+  <script type="text/markdown" data-md>
+### 이 뷰어는
+- 리포트에서 **케이스(샘플)를 보여주는 기본 방식**입니다 — 스크린샷 대신 독자가 모든 슬라이스를 직접 넘겨볼 수 있습니다.
+- 만드는 법: `aireport viewer --image ct.nii.gz --label gt.nii.gz --pred pred.nii.gz -o assets/case.vol.json` → 페이지에 아래 한 줄
+    ```html
+    <script type="application/json" class="vol-island" data-src="assets/case.vol.json"></script>
+    ```
+### 조작
+- 2D 패널: 휠 = 슬라이스 이동 · 클릭/드래그 = 십자선 · 우클릭 드래그 = window/level · Ctrl+휠 = 확대 · Shift+드래그 = 이동
+- 3D 패널: 드래그 = 회전 · 휠 = 확대 · 툴바에서 slices / hide air / surfaces 토글
+- 범례 칩을 누르면 해당 라벨만 숨김, GT/Prediction 별로 fill ↔ contour 전환
+  </script>
+
+  <script type="application/json" class="vol-island" data-src="phantom.vol.json"></script>
+
+  <footer class="foot"></footer>
+</div>
+<script src="../../assets/markdown-it.min.js" defer></script>
+<script src="../../assets/components/report-islands.js" defer></script>
+<script src="../../assets/components/volume-viewer.js" defer></script>
+</body>
+</html>

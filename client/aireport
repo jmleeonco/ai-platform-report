@@ -1,0 +1,685 @@
+#!/usr/bin/env python3
+"""aireport — write HTML experiment reports on the AI Platform report server.
+
+Typical flow (what the ai-report skill tells Claude / Codex to do):
+
+  aireport suggest "liver tumor segmentation"      # does the topic exist? closest matches + proposed slug
+  aireport new-topic --slug liver-tumor-seg --name "Liver Tumor Segmentation" --confirmed   # only after the user OKs it
+  aireport new-exp liver-tumor-seg --title "nnU-Net baseline"   # allocates 실험 N, pulls it to a local work dir
+  aireport viewer --image ct.nii.gz --label gt.nii.gz --pred pred.nii.gz -o <dir>/assets/case01.vol.json
+  ...edit <dir>/index.html (markdown island, metrics island, vol-island)...
+  aireport check <dir>
+  aireport push <dir>                               # uploads assets + page, prints the URL
+
+Server URL: --url, $AIREPORT_URL, ~/.config/aireport/config.json, else the built-in default.
+Author name: --owner / $AIREPORT_OWNER / config (`aireport config --owner 이름`).
+Only `viewer`/`phantom` need numpy (+ nibabel or SimpleITK); everything else is stdlib.
+"""
+import argparse
+import base64
+import gzip
+import hashlib
+import json
+import os
+import re
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+DEFAULT_URL = "__AIREPORT_URL__"
+if DEFAULT_URL.startswith("__"):  # not served by the report server (repo checkout) → built-in default
+    DEFAULT_URL = "http://10.101.1.183:8090"
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "aireport" / "config.json"
+WORKDIR = Path(os.environ.get("AIREPORT_WORKDIR", Path.home() / "aireport-work"))
+STATE = ".aireport.json"
+PALETTE = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#42d4f4", "#f032e6", "#bfef45", "#fabed4",
+           "#469990", "#dcbeff", "#9a6324", "#fffac8", "#800000", "#aaffc3", "#808000", "#ffd8b1", "#000075"]
+STATUSES = ["시작 전", "진행 중", "완료", "일시정지", "중단"]
+
+
+def die(msg, code=1):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def load_config():
+    try:
+        return json.loads(CONFIG.read_text("utf-8"))
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+# ----------------------------------------------------------------------------- HTTP
+class Api:
+    def __init__(self, url, owner, token):
+        self.url, self.owner, self.token = url.rstrip("/"), owner, token
+
+    def request(self, method, path, body=None, raw=False, ctype=None):
+        data, headers = None, {"X-Report-Author": urllib.parse.quote(self.owner or "")}
+        if self.token:
+            headers["X-Report-Token"] = self.token
+        if body is not None:
+            if isinstance(body, (bytes, bytearray)):
+                data, headers["Content-Type"] = bytes(body), ctype or "application/octet-stream"
+            else:
+                data, headers["Content-Type"] = json.dumps(body).encode(), "application/json"
+        req = urllib.request.Request(self.url + path, data=data, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=300) as r:
+                payload = r.read()
+        except urllib.error.HTTPError as e:
+            payload = e.read()
+            try:
+                return e.code, json.loads(payload)
+            except ValueError:
+                return e.code, {"error": payload.decode("utf-8", "replace")[:500]}
+        except urllib.error.URLError as e:
+            die(f"cannot reach the report server at {self.url} ({e.reason}). Set --url or $AIREPORT_URL.")
+        if raw:
+            return 200, payload
+        return 200, json.loads(payload) if payload else {}
+
+    def ok(self, method, path, body=None, **kw):
+        code, obj = self.request(method, path, body, **kw)
+        if code >= 400:
+            print(json.dumps(obj, ensure_ascii=False, indent=1), file=sys.stderr)
+            die(f"{method} {path} → HTTP {code}: {obj.get('error', '')}")
+        return obj
+
+
+def quote_path(p):
+    return "/".join(urllib.parse.quote(x) for x in p.split("/"))
+
+
+def sha(b):
+    return hashlib.sha256(b).hexdigest()
+
+
+# ------------------------------------------------------------------------ commands
+def cmd_config(a, api):
+    cfg = load_config()
+    for k in ("url", "owner", "token"):
+        v = getattr(a, k)
+        if v is not None:
+            cfg[k] = v
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), "utf-8")
+    shown = dict(cfg, token="***" if cfg.get("token") else "")
+    print(json.dumps(shown, ensure_ascii=False, indent=2))
+
+
+def cmd_health(a, api):
+    print(json.dumps(api.ok("GET", "/api/health"), ensure_ascii=False, indent=1))
+
+
+def cmd_guide(a, api):
+    path = "/AGENTS.md" if not a.doc else f"/docs/{a.doc.removesuffix('.md')}.md"
+    _, body = api.request("GET", path, raw=True)
+    sys.stdout.write(body.decode("utf-8") if isinstance(body, bytes) else json.dumps(body))
+
+
+def cmd_topics(a, api):
+    topics = api.ok("GET", "/api/topics")
+    if a.json:
+        return print(json.dumps(topics, ensure_ascii=False, indent=1))
+    if not topics:
+        return print("(no topics yet)")
+    for slug, t in sorted(topics.items(), key=lambda kv: kv[1].get("edited", ""), reverse=True):
+        print(f"{slug:36} {t.get('name', '')}  [{t.get('status', '')}] owner={t.get('owner') or '-'} "
+              f"exps={len(t.get('experiments', []))} edited={t.get('edited', '')}")
+
+
+def cmd_topic(a, api):
+    t = api.ok("GET", f"/api/topics/{quote_path(a.slug)}")
+    print(json.dumps(t, ensure_ascii=False, indent=1))
+
+
+def cmd_suggest(a, api):
+    q = " ".join(a.text)
+    r = api.ok("GET", "/api/suggest?q=" + urllib.parse.quote(q))
+    if a.json:
+        return print(json.dumps(r, ensure_ascii=False, indent=1))
+    if r["exact"]:
+        print(f"EXISTS: topic '{r['exact']}' matches \"{q}\" — use it.")
+    else:
+        print(f"NOT FOUND: no topic matches \"{q}\" exactly.")
+    if r["matches"]:
+        print("closest existing topics:")
+        for m in r["matches"]:
+            print(f"  {m['slug']:36} {m['name']}  (score {m['score']:.2f}, owner {m['owner'] or '-'}, {m['status']})")
+    if r["proposed"]:
+        p = r["proposed"]
+        print("proposed NEW topic (ask the user to confirm or rename before creating):")
+        print(f"  name: {p['name']}")
+        print(f"  slug: {p['slug'] or '(none — ' + p['note'] + ')'}")
+        print(f"  create: aireport new-topic --slug {p['slug'] or '<english-kebab-slug>'} "
+              f"--name \"{p['name']}\" --confirmed")
+
+
+def cmd_new_topic(a, api):
+    if not a.confirmed:
+        die("creating a topic needs the user's explicit OK on the name and slug. Show them the proposal "
+            "(aireport suggest \"…\"), then re-run with --confirmed.")
+    body = {"slug": a.slug, "name": a.name, "owner": a.owner_field or api.owner, "cat": a.cat or "",
+            "status": a.status, "kw": a.kw or "", "branch": a.branch or ""}
+    if a.overview_file:
+        body["overview"] = Path(a.overview_file).read_text("utf-8")
+    r = api.ok("POST", "/api/topics", body)
+    print(f"created topic {r['slug']}: {r['url']}")
+
+
+def cmd_set(a, api):
+    body = {k: v for k, v in {"name": a.name, "owner": a.owner_field, "cat": a.cat, "status": a.status,
+                              "kw": a.kw, "branch": a.branch}.items() if v is not None}
+    if not body:
+        die("nothing to set")
+    r = api.ok("PATCH", f"/api/topics/{quote_path(a.slug)}", body)
+    print(json.dumps(r, ensure_ascii=False, indent=1))
+
+
+def work_dir(a, slug, nn):
+    return Path(a.dir).expanduser() if getattr(a, "dir", None) else WORKDIR / slug / nn
+
+
+def pull(api, slug, nn, dest, force=False):
+    files = api.ok("GET", f"/api/files/{quote_path(slug)}/{nn}")["files"]
+    dest.mkdir(parents=True, exist_ok=True)
+    state_f = dest / STATE
+    if (dest / "index.html").exists() and state_f.exists() and not force:
+        st = json.loads(state_f.read_text("utf-8"))
+        local = (dest / "index.html").read_bytes()
+        if sha(local) != st.get("base"):
+            die(f"{dest}/index.html has local edits that were never pushed; push them or pass --force to discard")
+    hashes = {}
+    for f in files:
+        _, body = api.request("GET", f"/topics/{quote_path(slug)}/{nn}/{quote_path(f)}", raw=True)
+        if not isinstance(body, bytes):
+            die(f"could not download {f}")
+        (dest / f).parent.mkdir(parents=True, exist_ok=True)
+        (dest / f).write_bytes(body)
+        hashes[f] = sha(body)
+    (dest / "assets").mkdir(exist_ok=True)
+    state = {"server": api.url, "slug": slug, "nn": nn, "base": hashes.get("index.html"), "pushed": hashes}
+    state_f.write_text(json.dumps(state, indent=1), "utf-8")
+    return files
+
+
+def cmd_new_exp(a, api):
+    body = {"title": a.title, "owner": a.owner_field or api.owner}
+    if a.markdown_file:
+        body["markdown"] = Path(a.markdown_file).read_text("utf-8")
+    code, r = api.request("POST", f"/api/topics/{quote_path(a.slug)}/experiments", body)
+    if code == 404 and "suggestions" in r:
+        s = r["suggestions"]
+        print(f"topic '{a.slug}' does not exist.", file=sys.stderr)
+        for m in s.get("matches", []):
+            print(f"  did you mean: {m['slug']:32} {m['name']}", file=sys.stderr)
+        if s.get("proposed"):
+            print(f"  or create it (after the user confirms the name): aireport new-topic --slug "
+                  f"{s['proposed'].get('slug') or '<slug>'} --name \"…\" --confirmed", file=sys.stderr)
+        sys.exit(2)
+    if code >= 400:
+        die(f"HTTP {code}: {r.get('error')}")
+    dest = work_dir(a, r["slug"], r["nn"])
+    pull(api, r["slug"], r["nn"], dest, force=True)
+    print(f"created 실험 {int(r['nn'])} in topic {r['slug']}")
+    print(f"  page:     {r['url']}")
+    print(f"  work dir: {dest}   (edit index.html, put figures/volumes in assets/, then: aireport push {dest})")
+
+
+def cmd_pull(a, api):
+    m = re.fullmatch(r"([a-z0-9-]+)/(\d{2,3})", a.target.strip("/"))
+    if not m:
+        die("target must look like <slug>/<NN>, e.g. liver-tumor-seg/03")
+    dest = work_dir(a, m.group(1), m.group(2))
+    files = pull(api, m.group(1), m.group(2), dest, force=a.force)
+    print(f"pulled {len(files)} files → {dest}")
+
+
+def cmd_push(a, api):
+    d = Path(a.dir).expanduser()
+    if d.is_file():
+        d = d.parent
+    st_f = d / STATE
+    if not st_f.exists():
+        die(f"{d} has no {STATE}; create the page with `aireport new-exp` or `aireport pull <slug>/<NN>` first")
+    st = json.loads(st_f.read_text("utf-8"))
+    if not a.no_check:
+        errs = run_check(d, quiet=False)
+        if errs and not a.force:
+            die(f"{errs} check error(s) — fix them (or --force)")
+    slug, nn = st["slug"], st["nn"]
+    base = f"/topics/{quote_path(slug)}/{nn}/"
+    # conflict guard: the page changed on the server (e.g. browser editor) since our pull
+    code, remote = api.request("GET", base + "index.html", raw=True)
+    local_page = (d / "index.html").read_bytes()
+    if code == 200 and isinstance(remote, bytes) and sha(remote) not in (st.get("base"), sha(local_page)) and not a.force:
+        die("index.html changed on the server since your last pull (someone edited it). "
+            f"Run `aireport pull {slug}/{nn} --dir <other dir>` and merge, or pass --force to overwrite.")
+    files = sorted(p for p in d.rglob("*") if p.is_file()
+                   and not any(x.startswith(".") for x in p.relative_to(d).parts))
+    files.sort(key=lambda p: p.name == "index.html" and p.parent == d)  # page last, after its assets
+    pushed, sent = st.get("pushed", {}), 0
+    for p in files:
+        rel = p.relative_to(d).as_posix()
+        data = p.read_bytes()
+        if pushed.get(rel) == sha(data) and not a.all:
+            continue
+        api.ok("PUT", base + quote_path(rel), data)
+        pushed[rel] = sha(data)
+        sent += 1
+        print(f"  ↑ {rel} ({len(data) / 1024:.0f} KB)")
+    st["pushed"], st["base"] = pushed, sha(local_page)
+    st_f.write_text(json.dumps(st, indent=1), "utf-8")
+    print(f"pushed {sent} file(s). page: {api.url}{base}index.html")
+
+
+# --------------------------------------------------------------------------- check
+def run_check(d, quiet=False):
+    d = Path(d)
+    page = d / "index.html" if d.is_dir() else d
+    d = page.parent
+    errors, warns = [], []
+    try:
+        text = page.read_text("utf-8")
+    except FileNotFoundError:
+        print(f"✗ {page} not found")
+        return 1
+    mds = re.findall(r'<script[^>]*type="text/markdown"[^>]*data-md[^>]*>(.*?)</script>', text, re.S)
+    if not mds:
+        warns.append("no markdown island (<script type=\"text/markdown\" data-md>)")
+    for md in mds:
+        for i, line in enumerate(md.splitlines(), 1):
+            if "\t" in line[: len(line) - len(line.lstrip())]:
+                errors.append(f"markdown line {i}: tab indentation — use 4 spaces per level")
+            if re.match(r"\s*#{1,2}\s", line):
+                warns.append(f"markdown line {i}: headings start at ### (page title is the <h1>)")
+        for img in re.findall(r"!\[[^\]]*\]\(([^)\s]+)", md):
+            check_ref(d, img, errors, "image")
+        if re.search(r"!\[[^\]]*\]\([^)]*\s[^)]*\.(png|jpe?g|gif)\)", md, re.I):
+            errors.append("image path contains a raw space — percent-encode it as %20 or rename the file")
+    for m in re.finditer(r'<script[^>]*class="[^"]*metrics-island[^"]*"[^>]*>(.*?)</script>', text, re.S):
+        try:
+            spec = json.loads(m.group(1))
+            if not spec.get("experiments") or not spec.get("metrics"):
+                errors.append("metrics-island needs experiments[] and metrics[]")
+        except ValueError as e:
+            errors.append(f"metrics-island JSON: {e}")
+    live = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    vols = re.findall(r'<script([^>]*class="[^"]*vol-island[^"]*"[^>]*)>(.*?)</script>', live, re.S)
+    for attrs, body in vols:
+        src = re.search(r'data-src="([^"]+)"', attrs)
+        if src:
+            p = check_ref(d, src.group(1), errors, "volume")
+            if p and p.exists():
+                try:
+                    with open(p, "rb") as f:
+                        head = f.read(200).decode("utf-8", "replace")
+                    if "aireport-volume/1" not in head:
+                        warns.append(f"{src.group(1)}: not written by `aireport viewer` (format tag missing)")
+                except OSError as e:
+                    errors.append(f"{src.group(1)}: {e}")
+        else:
+            try:
+                json.loads(body)
+            except ValueError as e:
+                errors.append(f"inline vol-island JSON: {e}")
+    if vols and "volume-viewer.js" not in live:
+        errors.append("page has a vol-island but does not load assets/components/volume-viewer.js")
+    if "report-islands.js" in live and "markdown-it.min.js" in live and live.find("markdown-it.min.js") > live.find("report-islands.js"):
+        errors.append("markdown-it.min.js must be loaded before report-islands.js")
+    for ref in re.findall(r'(?:src|href)="([^"]+)"', live):
+        if ref.startswith("file:") or re.match(r"/(home|mnt|drive|srv|tmp|Users)/", ref):
+            errors.append(f"local filesystem reference {ref} — copy the file into assets/ and use a relative path")
+    for ref in re.findall(r'<img[^>]*src="([^"]+)"', live):
+        check_ref(d, ref, errors, "image")
+    pngs = [p for p in (d / "assets").glob("*") if p.suffix.lower() in (".png", ".jpg", ".jpeg")] if (d / "assets").is_dir() else []
+    if not vols and pngs:
+        warns.append("figures but no vol-island: per-case sample visualizations should use the 3D slice "
+                     "overlay viewer by default (`aireport viewer`); keep PNGs for plots/curves")
+    big = [p for p in d.rglob("*") if p.is_file() and p.stat().st_size > 60 * 1024 * 1024]
+    for p in big:
+        warns.append(f"{p.relative_to(d)} is {p.stat().st_size / 1048576:.0f} MB — consider --max-dim / cropping")
+    if not quiet:
+        for w in warns:
+            print(f"  ⚠ {w}")
+        for e in errors:
+            print(f"  ✗ {e}")
+        print(f"check {page}: {len(errors)} error(s), {len(warns)} warning(s)")
+    return len(errors)
+
+
+def check_ref(d, ref, errors, kind):
+    if re.match(r"^(https?:|data:|#|mailto:)", ref) or ref.startswith("../"):
+        return None
+    p = d / urllib.parse.unquote(ref.split("#")[0].split("?")[0])
+    if not p.exists():
+        errors.append(f"{kind} {ref} not found next to the page")
+        return None
+    if kind == "image" and p.suffix.lower() in (".png", ".jpg", ".jpeg"):
+        head = p.read_bytes()[:4]
+        if not (head.startswith(b"\x89PNG") or head.startswith(b"\xff\xd8")):
+            errors.append(f"{ref} is not a real PNG/JPG (convert it)")
+    return p
+
+
+def cmd_check(a, api):
+    sys.exit(1 if run_check(a.path) else 0)
+
+
+# -------------------------------------------------------------------------- viewer
+def _np():
+    try:
+        import numpy as np
+        return np
+    except ImportError:
+        die("`aireport viewer` needs numpy (+ nibabel or SimpleITK): pip install numpy nibabel")
+
+
+def read_volume(path):
+    """→ (array[i,j,k] in RAS+ order, spacing (sx,sy,sz))"""
+    np = _np()
+    p = str(path)
+    if re.search(r"\.nii(\.gz)?$", p):
+        try:
+            import nibabel as nib
+            img = nib.as_closest_canonical(nib.load(p))
+            arr = np.asanyarray(img.dataobj)
+            if arr.ndim == 4:
+                arr = arr[..., 0]
+            return arr, tuple(float(z) for z in img.header.get_zooms()[:3])
+        except ImportError:
+            pass
+    try:
+        import SimpleITK as sitk
+    except ImportError:
+        die(f"cannot read {p}: install nibabel (NIfTI) or SimpleITK (NIfTI/NRRD/MHA/DICOM)")
+    if os.path.isdir(p):
+        r = sitk.ImageSeriesReader()
+        r.SetFileNames(r.GetGDCMSeriesFileNames(p))
+        img = r.Execute()
+    else:
+        img = sitk.ReadImage(p)
+    img = sitk.DICOMOrient(img, "RAS")  # DICOM convention: +i → R, +j → A, +k → S
+    arr = sitk.GetArrayFromImage(img)  # [k, j, i]
+    if arr.ndim == 4:
+        arr = arr[..., 0]
+    return np.ascontiguousarray(arr.transpose(2, 1, 0)), tuple(float(s) for s in img.GetSpacing()[:3])
+
+
+def resample(arr, factors, order):
+    np = _np()
+    if all(abs(f - 1) < 1e-6 for f in factors):
+        return arr
+    try:
+        from scipy import ndimage
+        return ndimage.zoom(arr, factors, order=order, mode="nearest", grid_mode=True)
+    except ImportError:
+        idx = [np.minimum((np.arange(int(round(n * f))) / f).astype(int), n - 1) for n, f in zip(arr.shape, factors)]
+        return arr[np.ix_(*idx)]
+
+
+def parse_names(spec):
+    if not spec:
+        return {}
+    p = Path(spec)
+    if p.exists():
+        txt = p.read_text("utf-8")
+        try:
+            obj = json.loads(txt)
+            return {str(k): (v if isinstance(v, str) else v.get("name", str(k))) for k, v in obj.items()}
+        except ValueError:
+            out = {}
+            for line in txt.splitlines():
+                m = re.match(r"\s*(\d+)[\s:,=]+(.+?)\s*$", line)
+                if m:
+                    out[m.group(1)] = m.group(2)
+            return out
+    return {k.strip(): v.strip() for k, v in (x.split(":", 1) for x in spec.split(",") if ":" in x)}
+
+
+def b64gz(arr):
+    return base64.b64encode(gzip.compress(arr.tobytes(order="F"), compresslevel=9, mtime=0)).decode("ascii")
+
+
+def build_volume(img, spacing, overlays, a):
+    """img: float array [i,j,k]; overlays: [(name, style, int array)] → aireport-volume/1 dict"""
+    np = _np()
+    sp = np.array(spacing, dtype=float)
+    # crop to labels (+margin) so the region of interest gets the voxel budget
+    union = None
+    for _, _, lab in overlays:
+        union = lab > 0 if union is None else (union | (lab > 0))
+    if union is not None and union.any() and not a.no_crop:
+        nz = np.argwhere(union)
+        m = np.ceil(a.margin / sp).astype(int)
+        lo = np.maximum(nz.min(0) - m, 0)
+        hi = np.minimum(nz.max(0) + m + 1, img.shape)
+        sl = tuple(slice(l, h) for l, h in zip(lo, hi))
+        img = img[sl]
+        overlays = [(n, s, lab[sl]) for n, s, lab in overlays]
+    # resample: largest physical extent → max_dim voxels, never upsample
+    ext = np.array(img.shape) * sp
+    target = max(ext.max() / a.max_dim, sp.min())
+    new_sp = np.maximum(sp, target)
+    factors = sp / new_sp
+    img = resample(img.astype(np.float32), factors, 1)
+    overlays = [(n, s, resample(lab, factors, 0)) for n, s, lab in overlays]
+    new_sp = ext / np.array(img.shape)  # zoom(grid_mode=True) keeps the physical extent
+    # intensity → uint8
+    mod = a.modality
+    if mod == "auto":
+        mod = "CT" if img.min() < -500 and img.max() > 300 else "MR"
+    if a.range:
+        lo_v, hi_v = a.range
+    elif mod == "CT":
+        lo_v, hi_v = -1000.0, 1000.0
+    else:
+        lo_v, hi_v = (float(x) for x in np.percentile(img, [0.5, 99.5]))
+        if hi_v <= lo_v:
+            hi_v = lo_v + 1
+    u8 = np.clip(np.round((img - lo_v) / (hi_v - lo_v) * 255), 0, 255).astype(np.uint8)
+    window = a.window or ([40, 400] if mod == "CT" else [(lo_v + hi_v) / 2, hi_v - lo_v])
+    names = parse_names(a.names)
+    ovs, all_ids = [], set()
+    for name, style, lab in overlays:
+        ids = sorted(int(v) for v in np.unique(lab) if v)
+        all_ids.update(ids)
+        if ids and ids[-1] > 255:
+            die(f"overlay {name}: label values > 255 are not supported")
+        ovs.append((name, style, lab.astype(np.uint8), ids))
+    color = {i: PALETTE[(i - 1) % len(PALETTE)] for i in sorted(all_ids)}
+    cursor = None
+    if union is not None:
+        u = np.zeros(u8.shape, bool)
+        for _, _, lab, _ in ovs:
+            u |= lab > 0
+        if u.any():
+            cursor = [int(round(c)) for c in np.argwhere(u).mean(0)]
+    out = {
+        "format": "aireport-volume/1", "case": a.case or "", "caption": a.caption or "",
+        "shape": [int(x) for x in u8.shape], "spacing": [round(float(x), 4) for x in new_sp], "orientation": "RAS",
+        "image": {"dtype": "uint8", "encoding": "gzip+base64", "range": [round(lo_v, 3), round(hi_v, 3)],
+                  "modality": mod, "window": [round(float(window[0]), 3), round(float(window[1]), 3)], "data": b64gz(u8)},
+        "overlays": [{"name": n, "style": s, "dtype": "uint8", "encoding": "gzip+base64",
+                      "labels": {str(i): {"name": names.get(str(i), f"label {i}"), "color": color[i]} for i in ids},
+                      "data": b64gz(lab)} for n, s, lab, ids in ovs],
+    }
+    if cursor:
+        out["cursor"] = cursor
+    return out
+
+
+def write_volume(vol, out):
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    # format tag first so `aireport check` can recognise the file from its head
+    out.write_text(json.dumps(vol, ensure_ascii=False, separators=(",", ":")), "utf-8")
+    rel = out.name if out.parent.name != "assets" else f"assets/{out.name}"
+    print(f"wrote {out}  ({out.stat().st_size / 1048576:.1f} MB, grid {vol['shape']} @ {vol['spacing']} mm, "
+          f"{len(vol['overlays'])} overlay(s))")
+    print("add to the page (inside .wrap, where the figure belongs):")
+    print(f'  <script type="application/json" class="vol-island" data-src="{rel}"></script>')
+
+
+def cmd_viewer(a, api):
+    np = _np()
+    img, sp = read_volume(a.image)
+    overlays = []
+    specs = [("GT", "fill", p) for p in (a.label or [])] + [("Prediction", "contour", p) for p in (a.pred or [])]
+    for o in a.overlay or []:
+        name, _, path = o.partition("=")
+        if not path:
+            die("--overlay must be NAME=path[:fill|contour]")
+        style = "contour"
+        if re.search(r":(fill|contour)$", path):
+            path, style = path.rsplit(":", 1)
+        specs.append((name, style, path))
+    if len([s for s in specs if s[0] == "GT"]) > 1:
+        specs = [(f"{n} {i + 1}" if n == "GT" else n, s, p) for i, (n, s, p) in enumerate(specs)]
+    for name, style, path in specs:
+        lab, lsp = read_volume(path)
+        if lab.shape != img.shape:
+            die(f"{path}: shape {lab.shape} differs from image {img.shape} — resample labels onto the image grid first")
+        overlays.append((name, style, np.rint(lab).astype(np.int32)))
+    a.case = a.case or re.sub(r"\.nii(\.gz)?$|\.(nrrd|mha|mhd)$", "", Path(a.image).name)
+    write_volume(build_volume(np.asarray(img, dtype=np.float32), sp, overlays, a), a.output)
+
+
+def cmd_phantom(a, api):
+    """Synthetic CT-like phantom with a GT and a slightly-off prediction (demo/testing; no patient data)."""
+    np = _np()
+    n, sp = (120, 100, 90), (2.0, 2.0, 2.5)
+    rng = np.random.default_rng(0)
+    g = np.stack(np.meshgrid(*[(np.arange(k) - k / 2 + 0.5) * s for k, s in zip(n, sp)], indexing="ij"))
+
+    def ell(c, r):
+        return sum(((g[i] - c[i]) / r[i]) ** 2 for i in range(3)) <= 1
+
+    img = np.full(n, -1000.0)
+    body = ell((0, 0, 0), (105, 85, 120))
+    img[body] = 20
+    img[ell((50, 0, 0), (35, 45, 80))] = -800    # right lung
+    img[ell((-55, 0, 0), (35, 45, 80))] = -800   # left lung (heart side, smaller)
+    img[ell((0, -55, 0), (12, 12, 120))] = 700   # spine
+    img += rng.normal(0, 25, n) * body
+    gt = np.zeros(n, np.int32)
+    gt[ell((30, 20, -40), (40, 30, 35))] = 1     # "liver" (patient right = +x in RAS)
+    gt[ell((-40, 10, -45), (18, 18, 25))] = 2    # "spleen" (patient left)
+    gt[ell((25, 25, -35), (10, 10, 10))] = 3     # "tumor" inside the liver
+    img[gt == 1] = 60
+    img[gt == 2] = 45
+    img[gt == 3] = 110
+    pred = np.zeros(n, np.int32)
+    pred[ell((28, 22, -38), (41, 28, 37))] = 1
+    pred[ell((-41, 9, -44), (17, 19, 23))] = 2
+    pred[ell((24, 27, -33), (8, 9, 11))] = 3
+    a.no_crop, a.margin, a.range, a.window, a.modality = True, 0, None, None, "CT"
+    a.names = a.names or "1:Liver,2:Spleen,3:Tumor"
+    a.case = a.case or "phantom"
+    a.caption = a.caption or "Synthetic phantom — GT filled, prediction as contour."
+    write_volume(build_volume(img.astype(np.float32), sp, [("GT", "fill", gt), ("Prediction", "contour", pred)], a), a.output)
+
+
+# ---------------------------------------------------------------------------- main
+def main():
+    cfg = load_config()
+    ap = argparse.ArgumentParser(prog="aireport", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--url", default=os.environ.get("AIREPORT_URL") or cfg.get("url") or DEFAULT_URL)
+    ap.add_argument("--owner", dest="author", default=os.environ.get("AIREPORT_OWNER") or cfg.get("owner") or "",
+                    help="your name (recorded as author; default owner of new pages)")
+    ap.add_argument("--token", default=os.environ.get("AIREPORT_TOKEN") or cfg.get("token") or "")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("config", help="save defaults to ~/.config/aireport/config.json")
+    p.add_argument("--url", dest="url", default=None)
+    p.add_argument("--owner", dest="owner", default=None)
+    p.add_argument("--token", dest="token", default=None)
+    p.set_defaults(fn=cmd_config)
+    sub.add_parser("health", help="server status").set_defaults(fn=cmd_health)
+    p = sub.add_parser("guide", help="print the server's AGENTS.md (or docs/<doc>.md)")
+    p.add_argument("doc", nargs="?")
+    p.set_defaults(fn=cmd_guide)
+    p = sub.add_parser("topics", help="list topics")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_topics)
+    p = sub.add_parser("topic", help="show one topic and its experiments")
+    p.add_argument("slug")
+    p.set_defaults(fn=cmd_topic)
+    p = sub.add_parser("suggest", help="does a topic exist? closest matches + proposed new slug")
+    p.add_argument("text", nargs="+")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_suggest)
+
+    def meta_args(p, required):
+        p.add_argument("--name", required=required)
+        p.add_argument("--topic-owner", dest="owner_field", default=None, help="topic owner (default: you)")
+        p.add_argument("--cat", default=None, help="category, e.g. 실험 / 개발 / 조사")
+        p.add_argument("--status", default=None if not required else "진행 중", choices=STATUSES)
+        p.add_argument("--kw", default=None, help="comma-separated keywords")
+        p.add_argument("--branch", default=None)
+
+    p = sub.add_parser("new-topic", help="create a topic (only after the user confirmed name + slug)")
+    p.add_argument("--slug", required=True)
+    meta_args(p, True)
+    p.add_argument("--overview-file", help="markdown for the topic overview (### Background / ### Objectives)")
+    p.add_argument("--confirmed", action="store_true", help="the user explicitly approved this new topic")
+    p.set_defaults(fn=cmd_new_topic)
+    p = sub.add_parser("set", help="update topic metadata (status, owner, keywords, …)")
+    p.add_argument("slug")
+    meta_args(p, False)
+    p.set_defaults(fn=cmd_set)
+    p = sub.add_parser("new-exp", help="create the next 실험 N page in a topic and pull it locally")
+    p.add_argument("slug")
+    p.add_argument("--title", required=True)
+    p.add_argument("--exp-owner", dest="owner_field", default=None, help="page owner (default: you)")
+    p.add_argument("--markdown-file", help="initial prose for the markdown island")
+    p.add_argument("--dir", help=f"local work dir (default {WORKDIR}/<slug>/<NN>)")
+    p.set_defaults(fn=cmd_new_exp)
+    p = sub.add_parser("pull", help="download an existing experiment for editing")
+    p.add_argument("target", help="<slug>/<NN>")
+    p.add_argument("--dir")
+    p.add_argument("--force", action="store_true", help="overwrite unpushed local edits")
+    p.set_defaults(fn=cmd_pull)
+    p = sub.add_parser("push", help="upload a work dir (assets first, page last)")
+    p.add_argument("dir")
+    p.add_argument("--all", action="store_true", help="re-upload unchanged files too")
+    p.add_argument("--force", action="store_true", help="push despite check errors / server-side changes")
+    p.add_argument("--no-check", action="store_true")
+    p.set_defaults(fn=cmd_push)
+    p = sub.add_parser("check", help="lint a local page (islands, image refs, volumes, markdown rules)")
+    p.add_argument("path")
+    p.set_defaults(fn=cmd_check)
+
+    def vol_args(p):
+        p.add_argument("-o", "--output", required=True, help="e.g. <work dir>/assets/case01.vol.json")
+        p.add_argument("--names", help='label names: "1:Liver,2:Spleen", a JSON {"1": "Liver"} or a "1 Liver" per-line file')
+        p.add_argument("--case", help="case id shown in the viewer")
+        p.add_argument("--caption", help="one line shown under the viewer")
+        p.add_argument("--max-dim", type=int, default=160, help="largest axis after resampling (default 160)")
+
+    p = sub.add_parser("viewer", help="make a 3D slice-overlay volume (.vol.json) from image + label maps")
+    p.add_argument("--image", required=True, help="NIfTI / NRRD / MHA / DICOM dir")
+    p.add_argument("--label", action="append", help="ground-truth label map (filled)")
+    p.add_argument("--pred", action="append", help="prediction label map (contour)")
+    p.add_argument("--overlay", action="append", help="extra map: NAME=path[:fill|contour]")
+    vol_args(p)
+    p.add_argument("--margin", type=float, default=40.0, help="crop margin around labels in mm (default 40)")
+    p.add_argument("--no-crop", action="store_true", help="keep the full field of view")
+    p.add_argument("--modality", default="auto", choices=["auto", "CT", "MR", "PT", "other"])
+    p.add_argument("--range", type=float, nargs=2, metavar=("LO", "HI"), help="intensity range stored (CT default -1000 1000)")
+    p.add_argument("--window", type=float, nargs=2, metavar=("CENTER", "WIDTH"), help="initial window")
+    p.set_defaults(fn=cmd_viewer)
+    p = sub.add_parser("phantom", help="write a synthetic demo volume (no patient data)")
+    vol_args(p)
+    p.set_defaults(fn=cmd_phantom)
+
+    a = ap.parse_args()
+    api = Api(a.url, a.author, a.token)
+    a.fn(a, api)
+
+
+if __name__ == "__main__":
+    main()

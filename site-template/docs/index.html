@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide · AI Platform Reports</title>
+<link rel="stylesheet" href="../assets/report.css">
+<style>
+  /* docs viewer: renders AGENTS.md and docs/*.md in place; ?doc=<name> selects one */
+  .doc-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 22px; }
+  .doc-nav a { font-size: .85em; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); }
+  .doc-nav a.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="breadcrumb"><a href="../index.html">Research Topics</a> › <span>Guide</span></nav>
+  <div class="doc-nav" id="nav"></div>
+  <div class="prose" id="doc">Loading…</div>
+  <footer class="foot"></footer>
+</div>
+<script src="../assets/markdown-it.min.js"></script>
+<script>
+(function () {
+  var DOCS = [["AGENTS", "../AGENTS.md", "Overview"], ["workflow", "workflow.md", "Workflow"],
+    ["setup", "setup.md", "Setup"], ["volume-viewer", "volume-viewer.md", "3D viewer"],
+    ["create-experiment", "create-experiment.md", "Experiment page"], ["markdown-rules", "markdown-rules.md", "Markdown"],
+    ["architecture", "architecture.md", "Architecture"], ["components", "components.md", "Components"]];
+  var md = window.markdownit({ html: false, linkify: true });
+  var nav = document.getElementById("nav"), out = document.getElementById("doc");
+  function byFile(href) {
+    var f = href.split("#")[0].split("/").pop();
+    for (var i = 0; i < DOCS.length; i++) if (DOCS[i][1].split("/").pop() === f) return DOCS[i][0];
+    return null;
+  }
+  function show(name) {
+    var d = DOCS.filter(function (x) { return x[0] === name; })[0] || DOCS[0];
+    nav.innerHTML = DOCS.map(function (x) {
+      return '<a href="?doc=' + x[0] + '"' + (x[0] === d[0] ? ' class="on"' : "") + ">" + x[2] + "</a>";
+    }).join("");
+    fetch(d[1], { cache: "no-cache" }).then(function (r) { return r.text(); }).then(function (t) {
+      out.innerHTML = md.render(t);
+      out.querySelectorAll("a[href]").forEach(function (a) {
+        var h = a.getAttribute("href"), n = /\.md(#.*)?$/.test(h) ? byFile(h) : null;
+        if (n) a.setAttribute("href", "?doc=" + n);
+        else if (/^examples\//.test(h)) a.setAttribute("href", h);
+        else if (/^(\.\.\/)?(assets|docs)\//.test(h)) a.setAttribute("href", (d[1].indexOf("../") === 0 ? "../" : "") + h);
+      });
+      document.title = d[2] + " · AI Platform Reports";
+    });
+  }
+  show((/[?&]doc=([\w-]+)/.exec(location.search) || [])[1]);
+})();
+</script>
+</body>
+</html>
