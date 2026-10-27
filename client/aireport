@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """aireport — write HTML experiment reports on the AI Platform report server.
 
-Typical flow (what the ai-report skill tells Claude / Codex to do):
+Typical flow (what the pl-report skill tells Claude / Codex to do):
 
   aireport suggest "liver tumor segmentation"      # does the topic exist? closest matches + proposed slug
   aireport new-topic --slug liver-tumor-seg --name "Liver Tumor Segmentation" --confirmed   # only after the user OKs it

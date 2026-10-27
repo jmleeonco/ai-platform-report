@@ -1,5 +1,5 @@
 ---
-name: ai-report
+name: pl-report
 description: Write, update or publish an HTML experiment report on the AI Platform report server (http://10.101.1.183:8090) with the `aireport` CLI. Use whenever the user asks to write up / report / document / publish experiment results, an evaluation, or sample visualizations, or to edit an existing report there. Covers picking or explicitly confirming the topic, creating the page, the default 3D slice-overlay viewer for cases, and verifying over HTTP.
 ---
 

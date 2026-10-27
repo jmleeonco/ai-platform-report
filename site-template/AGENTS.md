@@ -18,7 +18,7 @@ index, the edit history — and regenerates it on every write. Never hand-edit t
 | [docs/markdown-rules.md](docs/markdown-rules.md) | CommonMark rules for the prose island (4-space nesting, `###` headings, images). |
 | [docs/volume-viewer.md](docs/volume-viewer.md) | **Sample visualization = 3D interactive slice overlay by default.** `aireport viewer` options, sizes, privacy. |
 | [docs/components.md](docs/components.md) | The reusable JS in `assets/components/` (self-documenting headers: metrics-island schema, volume JSON schema). |
-| [docs/setup.md](docs/setup.md) | Installing the `aireport` CLI + `ai-report` skill for Claude Code and Codex. |
+| [docs/setup.md](docs/setup.md) | Installing the `aireport` CLI + `pl-report` skill for Claude Code and Codex. |
 
 ## The rules that matter most
 

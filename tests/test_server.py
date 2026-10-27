@@ -143,6 +143,30 @@ class ServerTest(unittest.TestCase):
             '<script type="application/json" class="vol-island" data-src="assets/none.vol.json"></script></html>', "utf-8")
         self.assertGreaterEqual(cli.run_check(d, quiet=True), 4)  # tab, fake png, missing png, missing volume (+ no viewer js)
 
+    def test_install_script(self):
+        home = Path(TMP.name, "home")
+        legacy = home / ".claude" / "skills" / "ai-report"
+        legacy.mkdir(parents=True)
+        (legacy / "SKILL.md").write_text("---\nname: ai-report\n---\nuse aireport\n")
+        foreign = home / ".codex" / "skills" / "ai-report"  # someone else's skill with the old name: keep it
+        foreign.mkdir(parents=True)
+        (foreign / "SKILL.md").write_text("---\nname: ai-report\n---\nunrelated\n")
+        env = dict(os.environ, HOME=str(home), AIREPORT_URL=self.url, AIREPORT_OWNER="tester")
+        for k in ("CODEX_HOME", "XDG_CONFIG_HOME"):
+            env.pop(k, None)
+        subprocess.run(["bash", str(REPO / "client" / "install.sh")], env=env, check=True, capture_output=True)
+        skill = (REPO / "skills" / "pl-report" / "SKILL.md").read_text("utf-8")
+        self.assertIn("name: pl-report", skill)
+        for agent in (".claude", ".codex"):
+            self.assertEqual((home / agent / "skills" / "pl-report" / "SKILL.md").read_text("utf-8"), skill)
+        self.assertFalse(legacy.exists())
+        self.assertTrue(foreign.exists())
+        self.assertTrue(os.access(home / ".local" / "bin" / "aireport", os.X_OK))
+        cfg = json.loads((home / ".config" / "aireport" / "config.json").read_text())
+        self.assertEqual((cfg["url"], cfg["owner"]), (self.url, "tester"))
+        _, served = self.req("GET", "/client/SKILL.md", raw=True)
+        self.assertEqual(served.decode(), skill)
+
 
 @unittest.skipUnless(importlib.util.find_spec("numpy"), "numpy not installed")
 class ViewerTest(unittest.TestCase):

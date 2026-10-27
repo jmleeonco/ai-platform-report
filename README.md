@@ -7,19 +7,27 @@ slice viewer for cases built in.
 **Site: http://10.101.1.183:8090/**
 
 ```
-researcher ──"리포트 써줘"──▶ Claude / Codex ──ai-report skill──▶ aireport CLI ──HTTP──▶ report server ──nightly──▶ NAS
+researcher ──"리포트 써줘"──▶ Claude / Codex ──pl-report skill──▶ aireport CLI ──HTTP──▶ report server ──nightly──▶ NAS
                                                                                       (10.101.1.183:8090)       /mnt/ai-platform-report
 ```
 
 ## For researchers
 
-Install once (any machine on the network):
+Install once (any machine on the network) — either let your agent do it:
+
+```bash
+git clone git@github.com:jmleeonco/ai-platform-report.git && cd ai-platform-report
+claude   # or: codex  →  "set up the pl-report skill"   (the agent follows AGENTS.md)
+```
+
+or run the installer yourself:
 
 ```bash
 curl -fsSL http://10.101.1.183:8090/client/install.sh | AIREPORT_OWNER="이종민" bash
 ```
 
-Then ask your agent to write the report ("이번 실험 결과 리포트로 정리해줘"), or by hand:
+Restart Claude Code / Codex, then use **`/pl-report`** (Claude Code) or **`$pl-report`**
+(Codex) — or just ask ("이번 실험 결과 리포트로 정리해줘"). By hand:
 
 ```bash
 aireport suggest "liver tumor segmentation"            # existing topic? otherwise a proposed name/slug
@@ -43,8 +51,9 @@ Guides: [site docs](http://10.101.1.183:8090/docs/index.html) (source in `site-t
 
 ## For agents
 
-`AGENTS.md` (Codex) / `CLAUDE.md` (Claude Code) — how to set up the skill, write reports,
-and deploy. The skill itself: `skills/ai-report/SKILL.md`.
+`AGENTS.md` (read by Codex; `CLAUDE.md` imports it for Claude Code) is the entry point: how
+to set up the `pl-report` skill on any machine, write reports, and deploy / move the
+server. The skill itself: `skills/pl-report/SKILL.md` (one file for both agents).
 
 ## Server operations (10.101.1.183)
 
@@ -65,7 +74,7 @@ and deploy. The skill itself: `skills/ai-report/SKILL.md`.
 server/            app.py (server + API, stdlib) · Dockerfile
 site-template/     managed layer copied into the site on start: AGENTS.md, docs/, assets/
 client/            aireport CLI · install.sh (CLI + skill for Claude Code and Codex)
-skills/ai-report/  SKILL.md
+skills/pl-report/  SKILL.md
 deploy/            install-server.sh · backup.sh · config.env
 tests/
 ```

@@ -650,7 +650,7 @@ def sync_managed():
         if (CLIENT / f).is_file():
             text = (CLIENT / f).read_text("utf-8").replace("__AIREPORT_URL__", PUBLIC_URL)
             atomic_write(cdir / f, text)
-    skill = SKILLS / "ai-report" / "SKILL.md"
+    skill = SKILLS / "pl-report" / "SKILL.md"
     if skill.is_file():
         atomic_write(cdir / "SKILL.md", skill.read_text("utf-8"))
     (SITE / "topics").mkdir(exist_ok=True)
