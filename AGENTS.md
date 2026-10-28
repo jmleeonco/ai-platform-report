@@ -38,7 +38,8 @@ skill under its previous name `ai-report`. Re-running it is safe (that's also ho
 
 Done when: `aireport health` answers, `aireport config` shows the owner, and the skill file
 exists for each agent. Tell the user to **restart their agent session** so `/pl-report` is
-picked up. No repo checkout? `curl -fsSL http://10.101.1.183:8090/client/install.sh | AIREPORT_OWNER="<name>" bash`.
+picked up. No repo checkout? `curl -fsSL https://raw.githubusercontent.com/jmleeonco/ai-platform-report/main/client/install.sh | AIREPORT_OWNER="<name>" bash`
+(downloads from the report server, or from GitHub if the server is unreachable).
 
 ## Write a report
 

@@ -2,7 +2,8 @@
 #
 # Install the `aireport` CLI and the `pl-report` skill for Claude Code and Codex.
 #
-#   From the report server (no git needed):
+#   From GitHub or the report server (no git needed):
+#     curl -fsSL https://raw.githubusercontent.com/jmleeonco/ai-platform-report/main/client/install.sh | bash
 #     curl -fsSL http://10.101.1.183:8090/client/install.sh | bash
 #   From a checkout of the ai-platform-report repo:
 #     bash client/install.sh
@@ -21,9 +22,16 @@ case "$URL" in __*) URL="http://10.101.1.183:8090" ;; esac
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 TARGETS="${SKILL_TARGETS:-claude codex}"
 LINK="${LINK:-0}"
+GH_RAW="https://raw.githubusercontent.com/jmleeonco/ai-platform-report/main"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 ok()  { printf '    \033[1;32m✓\033[0m %s\n' "$*"; }
+# fetch <server path> <repo path> <dest>: the report server first, GitHub if it is unreachable
+fetch() {
+  curl -fsSL "$URL/$1" -o "$3.tmp" 2>/dev/null || curl -fsSL "$GH_RAW/$2" -o "$3.tmp" \
+    || { echo "cannot download $2 from $URL or GitHub" >&2; exit 1; }
+  mv "$3.tmp" "$3"
+}
 
 SRC=""
 here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
@@ -41,8 +49,7 @@ if [ -n "$SRC" ] && [ "$LINK" = 1 ]; then
 elif [ -n "$SRC" ]; then
   install -m 0755 "$SRC/client/aireport" "$BIN_DIR/aireport"; ok "copied from $SRC"
 else
-  curl -fsSL "$URL/client/aireport" -o "$BIN_DIR/aireport.tmp" && chmod 0755 "$BIN_DIR/aireport.tmp" \
-    && mv "$BIN_DIR/aireport.tmp" "$BIN_DIR/aireport"; ok "downloaded from $URL"
+  fetch client/aireport client/aireport "$BIN_DIR/aireport"; chmod 0755 "$BIN_DIR/aireport"; ok "downloaded"
 fi
 
 for t in $TARGETS; do
@@ -58,7 +65,7 @@ for t in $TARGETS; do
   elif [ -n "$SRC" ]; then
     install -m 0644 "$SRC/skills/pl-report/SKILL.md" "$dir/SKILL.md"
   else
-    curl -fsSL "$URL/client/SKILL.md" -o "$dir/SKILL.md"
+    fetch client/SKILL.md skills/pl-report/SKILL.md "$dir/SKILL.md"
   fi
   ok "installed"
   # the skill used to be called ai-report; remove that copy (only if it is ours) so it doesn't trigger twice

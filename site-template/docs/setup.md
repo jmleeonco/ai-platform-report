@@ -21,7 +21,7 @@ NRRD/MHA/DICOM); everything else is stdlib.
 ## From the git repo
 
 ```bash
-git clone git@github.com:jmleeonco/ai-platform-report.git && cd ai-platform-report
+git clone https://github.com/jmleeonco/ai-platform-report.git && cd ai-platform-report
 bash client/install.sh                 # copies; LINK=1 bash client/install.sh symlinks (git pull updates)
 ```
 

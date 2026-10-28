@@ -6,6 +6,21 @@ slice viewer for cases built in.
 
 **Site: http://10.101.1.183:8090/**
 
+> **🤖 AI agent (Claude Code / Codex) given this repo URL to install / add / set up?**
+> Install the **`pl-report`** skill + `aireport` CLI — no clone needed:
+>
+> 1. Ask the user for their name (Korean full name is fine), unless they already gave it.
+> 2. Run (installs for both Claude Code and Codex; safe to re-run):
+>    ```bash
+>    curl -fsSL https://raw.githubusercontent.com/jmleeonco/ai-platform-report/main/client/install.sh | AIREPORT_OWNER="<name>" bash
+>    ```
+> 3. Check: `~/.local/bin/aireport health` prints `"ok": true` (needs the office network).
+>    For the 3D case viewer also `python3 -m pip install --user numpy scipy nibabel`.
+> 4. Tell the user it's installed and to **restart Claude Code / Codex**; then `/pl-report`
+>    (Claude Code) or `$pl-report` (Codex), or just "리포트 써줘".
+>
+> Details, options and server deployment: [AGENTS.md](AGENTS.md).
+
 ```
 researcher ──"리포트 써줘"──▶ Claude / Codex ──pl-report skill──▶ aireport CLI ──HTTP──▶ report server ──nightly──▶ NAS
                                                                                       (10.101.1.183:8090)       /mnt/ai-platform-report
@@ -13,12 +28,9 @@ researcher ──"리포트 써줘"──▶ Claude / Codex ──pl-report skil
 
 ## For researchers
 
-Install once (any machine on the network) — either let your agent do it:
+Install once (any machine on the network) — give your agent the repo URL:
 
-```bash
-git clone git@github.com:jmleeonco/ai-platform-report.git && cd ai-platform-report
-claude   # or: codex  →  "set up the pl-report skill"   (the agent follows AGENTS.md)
-```
+> https://github.com/jmleeonco/ai-platform-report 설치해줘
 
 or run the installer yourself:
 
