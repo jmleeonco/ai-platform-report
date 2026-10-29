@@ -3,7 +3,7 @@
 ## One line, from any machine on the network
 
 ```bash
-curl -fsSL http://10.101.1.183:8090/client/install.sh | AIREPORT_OWNER="이종민" bash
+curl -fsSL https://plreport.oncosoft.io/client/install.sh | AIREPORT_OWNER="이종민" bash
 ```
 
 This installs:

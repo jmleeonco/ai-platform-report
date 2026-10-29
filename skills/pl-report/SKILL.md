@@ -1,6 +1,6 @@
 ---
 name: pl-report
-description: Write, update or publish an HTML experiment report on the AI Platform report server (http://10.101.1.183:8090) with the `aireport` CLI. Use whenever the user asks to write up / report / document / publish experiment results, an evaluation, or sample visualizations, or to edit an existing report there. Covers picking or explicitly confirming the topic, creating the page, the default 3D slice-overlay viewer for cases, and verifying over HTTP.
+description: Write, update or publish an HTML experiment report on the AI Platform report server (https://plreport.oncosoft.io) with the `aireport` CLI. Use whenever the user asks to write up / report / document / publish experiment results, an evaluation, or sample visualizations, or to edit an existing report there. Covers picking or explicitly confirming the topic, creating the page, the default 3D slice-overlay viewer for cases, and verifying over HTTP.
 ---
 
 # AI Platform report — core rules
@@ -14,7 +14,7 @@ machine — no NFS, SSH or local copy.
 1. **Read the guide first.** Run `aireport guide` (the server's AGENTS.md) before writing
    any HTML, and `aireport guide workflow` / `aireport guide volume-viewer` as needed. If
    `aireport` is not installed, follow `docs/setup.md` of the ai-platform-report repo (or
-   `curl -fsSL http://10.101.1.183:8090/client/install.sh | bash`).
+   `curl -fsSL https://plreport.oncosoft.io/client/install.sh | bash`).
 
 2. **Know who is writing.** If `aireport config` shows no `owner`, ask the user for their
    name (Korean full name is fine) and save it with `aireport config --owner "<name>"`.

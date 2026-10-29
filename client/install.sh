@@ -4,7 +4,7 @@
 #
 #   From GitHub or the report server (no git needed):
 #     curl -fsSL https://raw.githubusercontent.com/jmleeonco/ai-platform-report/main/client/install.sh | bash
-#     curl -fsSL http://10.101.1.183:8090/client/install.sh | bash
+#     curl -fsSL https://plreport.oncosoft.io/client/install.sh | bash
 #   From a checkout of the ai-platform-report repo:
 #     bash client/install.sh
 #
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 URL="${AIREPORT_URL:-__AIREPORT_URL__}"
-case "$URL" in __*) URL="http://10.101.1.183:8090" ;; esac
+case "$URL" in __*) URL="https://plreport.oncosoft.io" ;; esac
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 TARGETS="${SKILL_TARGETS:-claude codex}"
 LINK="${LINK:-0}"

@@ -30,7 +30,7 @@ from pathlib import Path
 
 DEFAULT_URL = "__AIREPORT_URL__"
 if DEFAULT_URL.startswith("__"):  # not served by the report server (repo checkout) → built-in default
-    DEFAULT_URL = "http://10.101.1.183:8090"
+    DEFAULT_URL = "https://plreport.oncosoft.io"
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "aireport" / "config.json"
 WORKDIR = Path(os.environ.get("AIREPORT_WORKDIR", Path.home() / "aireport-work"))
 STATE = ".aireport.json"
@@ -44,11 +44,17 @@ def die(msg, code=1):
     sys.exit(code)
 
 
+LEGACY_URLS = {"http://10.101.1.183:8090"}  # saved by installs before the plreport.oncosoft.io domain
+
+
 def load_config():
     try:
-        return json.loads(CONFIG.read_text("utf-8"))
+        cfg = json.loads(CONFIG.read_text("utf-8"))
     except (FileNotFoundError, ValueError):
         return {}
+    if cfg.get("url", "").rstrip("/") in LEGACY_URLS:
+        cfg["url"] = DEFAULT_URL
+    return cfg
 
 
 # ----------------------------------------------------------------------------- HTTP

@@ -1,7 +1,7 @@
 # AI Platform Reports — Agent Guide
 
 Static, three-level HTML report site for the AI platform team, served by the report
-server at **http://10.101.1.183:8090/**. **No build step, no framework** — each page is one
+server at **https://plreport.oncosoft.io/**. **No build step, no framework** — each page is one
 `.html` whose content lives in inert data islands; shared JS/CSS renders them.
 
 You (Claude, Codex, or a human) only write **page content**. The server owns the

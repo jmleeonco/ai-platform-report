@@ -1,7 +1,7 @@
 # ai-platform-report — instructions for coding agents (Claude Code, Codex)
 
 This repo is the **AI Platform report system**: a small HTML report server
-(http://10.101.1.183:8090), the `aireport` CLI, and the **`pl-report` skill** that teaches
+(https://plreport.oncosoft.io), the `aireport` CLI, and the **`pl-report` skill** that teaches
 Claude / Codex to write reports with it. `CLAUDE.md` just imports this file.
 
 | The user says… | Do |
@@ -52,8 +52,12 @@ Follow `skills/pl-report/SKILL.md` (the installed skill) — in short: `aireport
 
 The live server is **10.101.1.183** (container `ai-platform-report`, port 8090, data in
 `/home/ubuntu/ai-platform-report-data/site`, nightly 02:30 KST snapshot to the NAS at
-`/mnt/ai-platform-report`). Deploy only when the user asks, and only on that host (or on
-a new host the user names).
+`/mnt/ai-platform-report`). Users reach it at **https://plreport.oncosoft.io** — an nginx
+reverse proxy on 10.101.1.2 (wildcard `*.oncosoft.io` certificate; not managed by this
+repo) forwards to `10.101.1.183:8090`, so `PUBLIC_URL` in `deploy/config.env` is the
+domain. Direct http://10.101.1.183:8090 keeps working. Deploy only when the user asks,
+and only on that host (or on a new host the user names). Moving the server to another
+host also means pointing that proxy at the new host.
 
 Upgrade after `git pull` (no sudo — docker group + user crontab; idempotent):
 

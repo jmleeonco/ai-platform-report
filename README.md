@@ -4,7 +4,7 @@ HTML experiment reports for the Oncosoft AI platform team — one place where ev
 researcher (or their Claude / Codex agent) writes up experiments, with a 3D interactive
 slice viewer for cases built in.
 
-**Site: http://10.101.1.183:8090/**
+**Site: https://plreport.oncosoft.io/**
 
 > **🤖 AI agent (Claude Code / Codex) given this repo URL to install / add / set up?**
 > Install the **`pl-report`** skill + `aireport` CLI — no clone needed:
@@ -22,8 +22,9 @@ slice viewer for cases built in.
 > Details, options and server deployment: [AGENTS.md](AGENTS.md).
 
 ```
-researcher ──"리포트 써줘"──▶ Claude / Codex ──pl-report skill──▶ aireport CLI ──HTTP──▶ report server ──nightly──▶ NAS
-                                                                                      (10.101.1.183:8090)       /mnt/ai-platform-report
+researcher ──"리포트 써줘"──▶ Claude / Codex ──pl-report skill──▶ aireport CLI ──HTTPS──▶ report server ──nightly──▶ NAS
+                                                                                     plreport.oncosoft.io       /mnt/ai-platform-report
+                                                                                     (→ 10.101.1.183:8090)
 ```
 
 ## For researchers
@@ -35,7 +36,7 @@ Install once (any machine on the network) — give your agent the repo URL:
 or run the installer yourself:
 
 ```bash
-curl -fsSL http://10.101.1.183:8090/client/install.sh | AIREPORT_OWNER="이종민" bash
+curl -fsSL https://plreport.oncosoft.io/client/install.sh | AIREPORT_OWNER="이종민" bash
 ```
 
 Restart Claude Code / Codex, then use **`/pl-report`** (Claude Code) or **`$pl-report`**
@@ -59,7 +60,7 @@ aireport push ~/aireport-work/liver-tumor-seg/01                  # → URL
 - **Everything else is automatic**: experiment numbering, topic list, root index ordering,
   search, edit history. Quick text fixes: the ✎ 편집 button on any page.
 
-Guides: [site docs](http://10.101.1.183:8090/docs/index.html) (source in `site-template/docs/`).
+Guides: [site docs](https://plreport.oncosoft.io/docs/index.html) (source in `site-template/docs/`).
 
 ## For agents
 
@@ -72,6 +73,7 @@ server. The skill itself: `skills/pl-report/SKILL.md` (one file for both agents)
 | | |
 |---|---|
 | Deploy / upgrade | `bash deploy/install-server.sh` (no sudo; Docker + user cron) |
+| URL | https://plreport.oncosoft.io/ — nginx on 10.101.1.2 (`*.oncosoft.io` cert, not managed here) proxies to 10.101.1.183:8090; http://10.101.1.183:8090/ also works directly |
 | Container | `ai-platform-report` (`--restart always`), port 8090 |
 | Live data | `/home/ubuntu/ai-platform-report-data/site` |
 | Edit history | `<site>/.history/` (every overwritten file + `log.jsonl` of who wrote what) |
