@@ -12,6 +12,7 @@
 #   ~/.local/bin/aireport
 #   ~/.claude/skills/pl-report/SKILL.md     (Claude Code)
 #   ~/.codex/skills/pl-report/SKILL.md      (Codex)
+# On Windows (Git Bash / MSYS / Cygwin) this hands over to install.ps1, the Windows installer.
 # Options (env): AIREPORT_URL, AIREPORT_OWNER, BIN_DIR, SKILL_TARGETS="claude codex", LINK=1
 # (LINK=1 with a repo checkout symlinks instead of copying, so `git pull` updates both.)
 #
@@ -38,6 +39,17 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 if [ -n "$here" ] && [ -f "$here/aireport" ] && [ -f "$here/../skills/pl-report/SKILL.md" ]; then
   SRC="$(cd "$here/.." && pwd)"
 fi
+
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*)
+    say "Windows detected → install.ps1"
+    ps1="$here/install.ps1"
+    if [ -z "$SRC" ] || [ ! -f "$ps1" ]; then
+      ps1="$(mktemp -d)/install.ps1"; fetch client/install.ps1 client/install.ps1 "$ps1"
+    fi
+    command -v cygpath >/dev/null && ps1="$(cygpath -w "$ps1")"
+    AIREPORT_URL="$URL" exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ps1" ;;
+esac
 
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 1; }
 

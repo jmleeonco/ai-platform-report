@@ -14,7 +14,10 @@ machine — no NFS, SSH or local copy.
 1. **Read the guide first.** Run `aireport guide` (the server's AGENTS.md) before writing
    any HTML, and `aireport guide workflow` / `aireport guide volume-viewer` as needed. If
    `aireport` is not installed, follow `docs/setup.md` of the ai-platform-report repo (or
-   `curl -fsSL https://plreport.oncosoft.io/client/install.sh | bash`).
+   `curl -fsSL https://plreport.oncosoft.io/client/install.sh | bash`; on Windows PowerShell
+   `irm https://plreport.oncosoft.io/client/install.ps1 | iex`). On Windows, if `aireport` is
+   not found right after installing, call `%LOCALAPPDATA%\aireport\aireport.cmd` (PATH
+   updates reach new terminals only).
 
 2. **Know who is writing.** If `aireport config` shows no `owner`, ask the user for their
    name (Korean full name is fine) and save it with `aireport config --owner "<name>"`.

@@ -601,6 +601,10 @@ def cmd_phantom(a, api):
 
 # ---------------------------------------------------------------------------- main
 def main():
+    if os.name == "nt" and not os.environ.get("PYTHONIOENCODING"):
+        # Windows pipes default to the ANSI code page (cp949 on Korean Windows), which can't encode ✓ ⚠ etc.
+        for s in (sys.stdout, sys.stderr):
+            s.reconfigure(encoding="utf-8", errors="replace")
     cfg = load_config()
     ap = argparse.ArgumentParser(prog="aireport", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url", default=os.environ.get("AIREPORT_URL") or cfg.get("url") or DEFAULT_URL)

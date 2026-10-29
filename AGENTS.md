@@ -13,10 +13,17 @@ Claude / Codex to write reports with it. `CLAUDE.md` just imports this file.
 
 ## Set up the pl-report skill (any machine)
 
-Needs `python3` (3.8+) and network access to the server; nothing else for the CLI.
+Needs Python 3.8+ and network access to the server; nothing else for the CLI.
 From the repo root:
 
+```powershell
+# Windows (PowerShell; from Git Bash `bash client/install.sh` hands over to this too)
+powershell -ExecutionPolicy Bypass -File client\install.ps1
+# no Python? winget install -e --id Python.Python.3.12  → open a new terminal → re-run
+```
+
 ```bash
+# Linux / macOS
 bash client/install.sh                         # copies; LINK=1 bash client/install.sh symlinks (git pull updates)
 aireport config --owner "<the user's name>"    # ask the user; Korean full name is fine (e.g. 이종민)
 aireport health                                # must print the server status
@@ -28,10 +35,12 @@ What it installs:
 | | |
 |---|---|
 | `~/.local/bin/aireport` | the CLI (make sure `~/.local/bin` is on `PATH`) |
+| Windows: `%LOCALAPPDATA%\aireport\` | `aireport.py` + `aireport.cmd` (cmd / PowerShell) + `aireport` (Git Bash); added to the user `PATH` — new terminals see it, so in the current one call it by full path |
 | `~/.claude/skills/pl-report/SKILL.md` | Claude Code skill → `/pl-report` |
 | `${CODEX_HOME:-~/.codex}/skills/pl-report/SKILL.md` | Codex skill → `$pl-report` |
 | `~/.config/aireport/config.json` | server URL + owner name |
 
+On Windows the skill paths are the same under `%USERPROFILE%`.
 Options (env): `SKILL_TARGETS="claude"` (only one agent), `BIN_DIR=…`, `AIREPORT_URL=…`
 (another server), `AIREPORT_OWNER=…`. The installer removes an older install of the same
 skill under its previous name `ai-report`. Re-running it is safe (that's also how to update).
@@ -94,7 +103,7 @@ Restore / backup-now / logs: see the operations table in `README.md`.
 | `site-template/` | managed layer copied into the site: `AGENTS.md` + `docs/` (format authority for report authors), `assets/` (CSS, markdown-it, components) |
 | `site-template/assets/components/volume-viewer.js` | the 3D slice overlay viewer |
 | `client/aireport` | CLI (stdlib; `viewer` needs numpy + nibabel/SimpleITK) |
-| `client/install.sh` | installs CLI + skill for Claude Code and Codex |
+| `client/install.sh`, `client/install.ps1` | install CLI + skill for Claude Code and Codex (Linux/macOS, Windows) |
 | `skills/pl-report/SKILL.md` | the skill (same file for both agents) |
 | `deploy/` | `install-server.sh`, `backup.sh`, `config.env` |
 | `tests/` | `python3 -m unittest discover -s tests` |

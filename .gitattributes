@@ -1,0 +1,5 @@
+# keep LF on Windows checkouts: bash scripts and the CLI break with CRLF
+*.sh text eol=lf
+client/aireport text eol=lf
+*.py text eol=lf
+*.ps1 text eol=crlf

@@ -2,15 +2,25 @@
 
 ## One line, from any machine on the network
 
+Windows (PowerShell; needs Python 3.8+ — `winget install -e --id Python.Python.3.12`):
+
+```powershell
+$env:AIREPORT_OWNER = "이종민"; irm https://plreport.oncosoft.io/client/install.ps1 | iex
+```
+
+Linux / macOS:
+
 ```bash
 curl -fsSL https://plreport.oncosoft.io/client/install.sh | AIREPORT_OWNER="이종민" bash
 ```
+
+Or give your agent the repo URL: *"https://github.com/jmleeonco/ai-platform-report 설치해줘"*.
 
 This installs:
 
 | What | Where |
 |---|---|
-| `aireport` CLI (Python 3 stdlib) | `~/.local/bin/aireport` |
+| `aireport` CLI (Python 3 stdlib) | `~/.local/bin/aireport` · Windows: `%LOCALAPPDATA%\aireport\aireport.cmd` (on the user PATH) |
 | skill for Claude Code | `~/.claude/skills/pl-report/SKILL.md` → `/pl-report`, or just ask "리포트 써줘" |
 | skill for Codex | `~/.codex/skills/pl-report/SKILL.md` → `$pl-report`, or just ask |
 | config | `~/.config/aireport/config.json` (server URL, your name) |

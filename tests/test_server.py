@@ -58,11 +58,14 @@ class ServerTest(unittest.TestCase):
 
     def test_managed_files_served(self):
         for p in ("/index.html", "/AGENTS.md", "/assets/components/volume-viewer.js", "/client/aireport",
-                  "/client/SKILL.md", "/docs/index.html", "/data/search-index.json"):
+                  "/client/install.ps1", "/client/SKILL.md", "/docs/index.html", "/data/search-index.json"):
             s, _ = self.req("GET", p, raw=True)
             self.assertEqual(s, 200, p)
         s, body = self.req("GET", "/client/aireport", raw=True)
         self.assertIn(b'DEFAULT_URL = "http://test"', body)
+        _, body = self.req("GET", "/client/install.ps1", raw=True)
+        self.assertIn(b'else { "http://test" }', body)
+        self.assertTrue(body.isascii())  # Windows PowerShell 5.1 reads BOM-less scripts as ANSI
 
     def test_topic_suggest_and_create(self):
         self.topic("kidney-seg", "Kidney Segmentation")

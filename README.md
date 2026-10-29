@@ -10,12 +10,21 @@ slice viewer for cases built in.
 > Install the **`pl-report`** skill + `aireport` CLI — no clone needed:
 >
 > 1. Ask the user for their name (Korean full name is fine), unless they already gave it.
-> 2. Run (installs for both Claude Code and Codex; safe to re-run):
->    ```bash
->    curl -fsSL https://raw.githubusercontent.com/jmleeonco/ai-platform-report/main/client/install.sh | AIREPORT_OWNER="<name>" bash
->    ```
-> 3. Check: `~/.local/bin/aireport health` prints `"ok": true` (needs the office network).
->    For the 3D case viewer also `python3 -m pip install --user numpy scipy nibabel`.
+> 2. Run the installer for the user's OS (installs for both Claude Code and Codex; safe to re-run):
+>    - **Windows** (PowerShell — also from Git Bash, via `powershell -c "…"`):
+>      ```powershell
+>      $env:AIREPORT_OWNER = "<name>"; irm https://raw.githubusercontent.com/jmleeonco/ai-platform-report/main/client/install.ps1 | iex
+>      ```
+>      Needs Python 3.8+; if it reports none, install it with `winget install -e --id Python.Python.3.12`,
+>      then run the installer again in a **new** terminal.
+>    - **Linux / macOS**:
+>      ```bash
+>      curl -fsSL https://raw.githubusercontent.com/jmleeonco/ai-platform-report/main/client/install.sh | AIREPORT_OWNER="<name>" bash
+>      ```
+> 3. Check: `aireport health` prints `"ok": true` (needs the office network). The command is
+>    `~/.local/bin/aireport` on Linux/macOS and `%LOCALAPPDATA%\aireport\aireport.cmd` on Windows
+>    (added to the user PATH; new terminals see it). For the 3D case viewer also
+>    `python -m pip install --user numpy scipy nibabel`.
 > 4. Tell the user it's installed and to **restart Claude Code / Codex**; then `/pl-report`
 >    (Claude Code) or `$pl-report` (Codex), or just "리포트 써줘".
 >
@@ -35,7 +44,12 @@ Install once (any machine on the network) — give your agent the repo URL:
 
 or run the installer yourself:
 
+```powershell
+# Windows (PowerShell)
+$env:AIREPORT_OWNER = "이종민"; irm https://plreport.oncosoft.io/client/install.ps1 | iex
+```
 ```bash
+# Linux / macOS
 curl -fsSL https://plreport.oncosoft.io/client/install.sh | AIREPORT_OWNER="이종민" bash
 ```
 
@@ -87,7 +101,7 @@ server. The skill itself: `skills/pl-report/SKILL.md` (one file for both agents)
 ```
 server/            app.py (server + API, stdlib) · Dockerfile
 site-template/     managed layer copied into the site on start: AGENTS.md, docs/, assets/
-client/            aireport CLI · install.sh (CLI + skill for Claude Code and Codex)
+client/            aireport CLI · install.sh / install.ps1 (CLI + skill for Claude Code and Codex; Linux·macOS / Windows)
 skills/pl-report/  SKILL.md
 deploy/            install-server.sh · backup.sh · config.env
 tests/

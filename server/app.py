@@ -646,7 +646,7 @@ def sync_managed():
     shutil.copy2(TEMPLATE / "AGENTS.md", SITE / "AGENTS.md")
     cdir = SITE / "client"
     cdir.mkdir(exist_ok=True)
-    for f in ("aireport", "install.sh"):
+    for f in ("aireport", "install.sh", "install.ps1"):
         if (CLIENT / f).is_file():
             text = (CLIENT / f).read_text("utf-8").replace("__AIREPORT_URL__", PUBLIC_URL)
             atomic_write(cdir / f, text)
@@ -665,7 +665,7 @@ class Handler(SimpleHTTPRequestHandler):
         ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8",
         ".md": "text/markdown; charset=utf-8", ".js": "text/javascript; charset=utf-8",
         ".css": "text/css; charset=utf-8", ".txt": "text/plain; charset=utf-8", "": "text/plain; charset=utf-8",
-        ".sh": "text/plain; charset=utf-8"})
+        ".sh": "text/plain; charset=utf-8", ".ps1": "text/plain; charset=utf-8"})
 
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(SITE), **kw)
