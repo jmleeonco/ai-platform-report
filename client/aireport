@@ -158,7 +158,15 @@ def cmd_suggest(a, api):
               f"--name \"{p['name']}\" --confirmed")
 
 
+def need_owner(api):
+    """Pages and edit history record who wrote them; never write anonymously."""
+    if not (api.owner or "").strip():
+        die("no owner (author name) is set. Ask the user for their name (Korean full name is fine), "
+            "save it with `aireport config --owner \"<name>\"`, then re-run.", code=3)
+
+
 def cmd_new_topic(a, api):
+    need_owner(api)
     if not a.confirmed:
         die("creating a topic needs the user's explicit OK on the name and slug. Show them the proposal "
             "(aireport suggest \"…\"), then re-run with --confirmed.")
@@ -207,6 +215,7 @@ def pull(api, slug, nn, dest, force=False):
 
 
 def cmd_new_exp(a, api):
+    need_owner(api)
     body = {"title": a.title, "owner": a.owner_field or api.owner}
     if a.markdown_file:
         body["markdown"] = Path(a.markdown_file).read_text("utf-8")
@@ -239,6 +248,7 @@ def cmd_pull(a, api):
 
 
 def cmd_push(a, api):
+    need_owner(api)
     d = Path(a.dir).expanduser()
     if d.is_file():
         d = d.parent

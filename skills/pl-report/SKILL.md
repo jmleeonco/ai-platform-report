@@ -18,6 +18,8 @@ machine — no NFS, SSH or local copy.
 
 2. **Know who is writing.** If `aireport config` shows no `owner`, ask the user for their
    name (Korean full name is fine) and save it with `aireport config --owner "<name>"`.
+   Never guess it from `$USER`, git config or the machine. `new-topic`, `new-exp` and
+   `push` refuse to run without an owner (exit code 3) — when you see that, ask; don't invent one.
 
 3. **Topic: match it, or get an explicit yes for a new one.** Run
    `aireport suggest "<topic words>"`.

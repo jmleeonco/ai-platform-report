@@ -166,6 +166,10 @@ class ServerTest(unittest.TestCase):
         self.assertEqual((cfg["url"], cfg["owner"]), (self.url, "tester"))
         bin_ = str(home / ".local" / "bin" / "aireport")
         env.pop("AIREPORT_OWNER")
+        (home / ".config" / "aireport" / "config.json").write_text(json.dumps({"url": self.url}))
+        r = subprocess.run([bin_, "new-exp", "kidney-seg", "--title", "x"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 3, r.stderr)  # no owner → refuse and tell the agent to ask
+        self.assertIn("Ask the user for their name", r.stderr)
         for args in (["config", "--owner", "이종민"], ["config"], ["health"]):  # the steps AGENTS.md tells agents to run
             subprocess.run([bin_, *args], env=env, check=True, capture_output=True)
         self.assertEqual(json.loads((home / ".config" / "aireport" / "config.json").read_text())["owner"], "이종민")
