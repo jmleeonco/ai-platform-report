@@ -24,15 +24,29 @@ aireport suggest "liver tumor segmentation"
 | `NOT FOUND` + closest matches | Ask the user whether one of the matches is the right topic. |
 | `NOT FOUND` + `proposed NEW topic` | Tell the user **explicitly**: "No topic matches. Create a new topic named *Liver Tumor Segmentation* with slug `liver-tumor-segmentation`?" — wait for yes or a different name. |
 
-Only then:
+Only then — and with the topic overview written, not left as placeholders:
 
 ```bash
+cat > overview.md <<'MD'
+### Background
+- Liver tumor segmentation on contrast CT is the bottleneck of the RT planning pipeline; manual contouring takes 20–40 min per case.
+- The in-house 2D U-Net (2025) under-segments small (<10 mm) lesions and has no 3D context.
+### Objectives
+- Establish an nnU-Net 3D baseline on the internal 180-case cohort and the LiTS public set.
+- Reach Dice ≥ 0.80 on tumor and ≥ 0.95 on liver, with per-lesion recall as a secondary metric.
+- Decide whether to move the planning pipeline to the 3D model.
+MD
 aireport new-topic --slug liver-tumor-segmentation --name "Liver Tumor Segmentation" \
-    --cat 실험 --kw "liver,tumor,nnU-Net" --confirmed     # optional: --overview-file overview.md
+    --cat 실험 --kw "liver,tumor,nnU-Net" --overview-file overview.md --confirmed
 ```
 
-`--confirmed` asserts the user approved the name and slug. Slugs are lowercase ASCII
-kebab-case; for a Korean topic name propose an English slug (name can stay Korean).
+`--confirmed` asserts the user approved the name and slug. The overview is the topic page's
+`### Background` / `### Objectives` block (markdown, headings from `###`, see
+[markdown-rules](markdown-rules.md)); the agent drafts it from what the user said about the
+work and shows it alongside the name + slug proposal. If you create a topic without
+`--overview-file`, the page gets `- …` placeholders and the CLI warns — fix them with the
+✎ 편집 button on the topic page. Slugs are lowercase ASCII kebab-case; for a Korean topic
+name propose an English slug (name can stay Korean).
 `aireport topics` lists everything; `aireport set <slug> --status 완료` updates metadata
 (`status` ∈ 시작 전 / 진행 중 / 완료 / 일시정지 / 중단).
 

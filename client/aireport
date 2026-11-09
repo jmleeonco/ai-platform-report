@@ -180,6 +180,10 @@ def cmd_new_topic(a, api):
             "status": a.status, "kw": a.kw or "", "branch": a.branch or ""}
     if a.overview_file:
         body["overview"] = Path(a.overview_file).read_text("utf-8")
+    else:
+        print("warning: no --overview-file — the topic page gets '### Background / ### Objectives' "
+              "placeholders. Draft them from the conversation and pass --overview-file, or fix them "
+              "later with the ✎ 편집 button on the topic page.", file=sys.stderr)
     r = api.ok("POST", "/api/topics", body)
     print(f"created topic {r['slug']}: {r['url']}")
 
@@ -645,7 +649,8 @@ def main():
     p = sub.add_parser("new-topic", help="create a topic (only after the user confirmed name + slug)")
     p.add_argument("--slug", required=True)
     meta_args(p, True)
-    p.add_argument("--overview-file", help="markdown for the topic overview (### Background / ### Objectives)")
+    p.add_argument("--overview-file", help="markdown for the topic overview (### Background / ### Objectives); "
+                                           "draft it from the conversation; without it the page keeps placeholders")
     p.add_argument("--confirmed", action="store_true", help="the user explicitly approved this new topic")
     p.set_defaults(fn=cmd_new_topic)
     p = sub.add_parser("set", help="update topic metadata (status, owner, keywords, …)")
