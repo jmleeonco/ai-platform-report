@@ -34,6 +34,13 @@ machine — no NFS, SSH or local copy.
      Create it with `aireport new-topic … --confirmed` only after the user agrees or gives
      another name. Never pass `--confirmed` on your own judgement, and never file the report
      under a loosely related existing topic without asking.
+   - **Write the topic overview yourself.** A new topic page has a `### Background` /
+     `### Objectives` overview; the server only puts `- …` placeholders there, and nothing
+     fills them later. Draft both sections (2–5 bullets each, markdown, headings from `###`)
+     from what the user told you about the work — the clinical / engineering problem, why it
+     matters now, what the topic is trying to establish — save them to a file and pass it
+     with `--overview-file`. Show the draft to the user together with the name + slug
+     proposal so one "yes" covers all of it; do not leave the placeholders in place.
 
 4. **Create pages through the server**: `aireport new-exp <slug> --title "<title>"`, or
    `aireport pull <slug>/<NN>` to edit an existing one. Edit only the local work dir it

@@ -25,7 +25,9 @@ index, the edit history — and regenerates it on every write. Never hand-edit t
 1. **Topic first, and never invent one silently.** Run `aireport suggest "<topic words>"`.
    If it reports `EXISTS`, use that slug. Otherwise show the user the closest existing topics
    **and** the proposed new name + slug, and create it (`aireport new-topic … --confirmed`)
-   only after they explicitly say yes (or give a different name).
+   only after they explicitly say yes (or give a different name). Draft the topic's
+   `### Background` / `### Objectives` overview from the conversation and pass it with
+   `--overview-file` — the server's `- …` placeholders are not meant to stay.
 2. **Create pages through the server** (`aireport new-exp <slug> --title …`) so the
    experiment number is allocated atomically — never `mkdir topics/<slug>/<NN>` yourself.
 3. **Per-case sample visualization defaults to the 3D interactive slice overlay viewer**
